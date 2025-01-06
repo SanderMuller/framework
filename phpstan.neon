@@ -1,0 +1,32 @@
+# Default PHPStan config
+# can be overridden by copying this to phpstan.neon
+# if that file exists, then that will be used as config
+
+includes:
+    - ./phpstan-baseline.neon
+    - phar://phpstan.phar/conf/bleedingEdge.neon
+
+parameters:
+    tmpDir: .cache/phpstan
+
+    paths:
+        - src
+
+    type_coverage:
+        return: 0
+        param: 0
+        property: 0
+        constant: 0
+        # also, how many files has declare strict types
+        declare: 0
+
+    # The level ranges from 0 to 9 and the latter is the highest level
+    # more info at https://phpstan.org/user-guide/rule-levels
+    level: 1
+
+    reportUnmatchedIgnoredErrors: false
+    reportMaybesInPropertyPhpDocTypes: false
+    treatPhpDocTypesAsCertain: false
+
+    ignoreErrors:
+        - identifier: new.static

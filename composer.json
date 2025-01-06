@@ -113,14 +113,21 @@
         "orchestra/testbench-core": "^9.6",
         "pda/pheanstalk": "^5.0.6",
         "php-http/discovery": "^1.15",
+        "phpstan/extension-installer": "^1.4",
         "phpstan/phpstan": "^1.11.5",
+        "phpstan/phpstan-deprecation-rules": "^1.2",
+        "phpstan/phpstan-phpunit": "^1.4",
         "phpunit/phpunit": "^10.5.35|^11.3.6",
         "predis/predis": "^2.3",
+        "rector/rector": "^1.2",
+        "rector/type-perfect": "^1.0",
         "resend/resend-php": "^0.10.0",
         "symfony/cache": "^7.0.3",
         "symfony/http-client": "^7.0.3",
         "symfony/psr-http-message-bridge": "^7.0.3",
-        "symfony/translation": "^7.0.3"
+        "symfony/translation": "^7.0.3",
+        "symplify/phpstan-extensions": "^11.4",
+        "tomasvotruba/type-coverage": "^1.0"
     },
     "conflict": {
         "tightenco/collect": "<5.5.33"
@@ -163,6 +170,12 @@
             "dev-master": "11.x-dev"
         }
     },
+    "scripts": {
+        "phpstan": "vendor/bin/phpstan analyse --memory-limit=2G -v",
+        "phpstan-simplified": "vendor/bin/phpstan analyse --error-format symplify -v",
+        "phpstan-clear-cache": "vendor/bin/phpstan clear-result-cache",
+        "rector": "vendor/bin/rector process"
+    },
     "suggest": {
         "ext-apcu": "Required to use the APC cache driver.",
         "ext-fileinfo": "Required to use the Filesystem class.",
@@ -203,7 +216,8 @@
         "sort-packages": true,
         "allow-plugins": {
             "composer/package-versions-deprecated": true,
-            "php-http/discovery": false
+            "php-http/discovery": false,
+            "phpstan/extension-installer": true
         }
     },
     "minimum-stability": "stable",
