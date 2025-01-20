@@ -857,7 +857,7 @@ class ValidationEmailRuleTest extends TestCase
         );
     }
 
-    public function testDefaultsCanBeUnset()
+    public function testDefaultMxValidationCanBeUnset()
     {
         Email::defaults(function () {
             return Rule::email()
@@ -870,11 +870,6 @@ class ValidationEmailRuleTest extends TestCase
 
         $this->fails(
             Email::default(),
-            $ssoSocialiteEmail,
-            ['The '.self::ATTRIBUTE_REPLACED.' must be a valid email address.']
-        );
-        $this->fails(
-            Email::default()->preventSpoofing(condition: false),
             $ssoSocialiteEmail,
             ['The '.self::ATTRIBUTE_REPLACED.' must be a valid email address.']
         );
@@ -896,47 +891,6 @@ class ValidationEmailRuleTest extends TestCase
                 return ! str_ends_with($value, '@example.com');
             }),
             $ssoSocialiteEmail,
-        );
-
-        $spoofingEmail = 'apр@laravel.com';
-
-        $this->fails(
-            Email::default(),
-            $spoofingEmail,
-            ['The '.self::ATTRIBUTE_REPLACED.' must be a valid email address.']
-        );
-        $this->fails(
-            Email::default()->strict(condition: false),
-            $spoofingEmail,
-            ['The '.self::ATTRIBUTE_REPLACED.' must be a valid email address.']
-        );
-        // Spoofing is allowed again when unset, so the spoofed email will pass the rule again.
-        $this->passes(
-            Email::default()->preventSpoofing(condition: false),
-            $spoofingEmail,
-        );
-
-        $failsInStrict = '"has space"@laravel.com';
-
-        $this->fails(
-            Email::default(),
-            $failsInStrict,
-            ['The '.self::ATTRIBUTE_REPLACED.' must be a valid email address.']
-        );
-        $this->fails(
-            Email::default()->validateMxRecord(condition: false),
-            $failsInStrict,
-            ['The '.self::ATTRIBUTE_REPLACED.' must be a valid email address.']
-        );
-        $this->fails(
-            Email::default()->preventSpoofing(condition: false),
-            $failsInStrict,
-            ['The '.self::ATTRIBUTE_REPLACED.' must be a valid email address.']
-        );
-        // Strict is disabled again when unset, so the rule will pass again.
-        $this->passes(
-            Email::default()->strict(condition: false),
-            $failsInStrict
         );
     }
 
