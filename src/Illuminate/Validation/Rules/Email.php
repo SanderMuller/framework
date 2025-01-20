@@ -218,7 +218,7 @@ class Email implements Rule, DataAwareRule, ValidatorAwareRule
      * @param  mixed  $value
      * @return array
      */
-    public function buildValidationRules($attribute, $value)
+    protected function buildValidationRules($attribute, $value)
     {
         $rules = [];
 
