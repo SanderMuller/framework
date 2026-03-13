@@ -39,11 +39,6 @@ class DatabaseQueryBuilderTest extends TestCase
 {
     protected $called;
 
-    protected function tearDown(): void
-    {
-        m::close();
-    }
-
     public function testBasicSelect()
     {
         $builder = $this->getBuilder();
@@ -1057,6 +1052,94 @@ class DatabaseQueryBuilderTest extends TestCase
         $this->assertEquals([0 => 2014], $builder->getBindings());
     }
 
+    public function testWhereNullSafeEquals()
+    {
+        $builder = $this->getBuilder();
+        $builder->select('*')->from('users')->whereNullSafeEquals('foo', 'bar');
+        $this->assertSame('select * from "users" where "foo" is not distinct from ?', $builder->toSql());
+        $this->assertEquals(['bar'], $builder->getBindings());
+
+        $builder = $this->getBuilder();
+        $builder->select('*')->from('users')->whereNullSafeEquals('foo', 'bar')->whereNullSafeEquals('baz', 'qux');
+        $this->assertSame('select * from "users" where "foo" is not distinct from ? and "baz" is not distinct from ?', $builder->toSql());
+        $this->assertEquals(['bar', 'qux'], $builder->getBindings());
+    }
+
+    public function testOrWhereNullSafeEquals()
+    {
+        $builder = $this->getBuilder();
+        $builder->select('*')->from('users')->where('foo', 'bar')->orWhereNullSafeEquals('baz', 'qux');
+        $this->assertSame('select * from "users" where "foo" = ? or "baz" is not distinct from ?', $builder->toSql());
+        $this->assertEquals(['bar', 'qux'], $builder->getBindings());
+    }
+
+    public function testWhereNullSafeEqualsViaNullSafeOperator()
+    {
+        $builder = $this->getBuilder();
+        $builder->select('*')->from('users')->where('foo', '<=>', 'bar');
+        $this->assertSame('select * from "users" where "foo" is not distinct from ?', $builder->toSql());
+        $this->assertEquals(['bar'], $builder->getBindings());
+    }
+
+    public function testWhereNullSafeEqualsWithNullViaOperator()
+    {
+        $builder = $this->getBuilder();
+        $builder->select('*')->from('users')->where('foo', '<=>', null);
+        $this->assertSame('select * from "users" where "foo" is null', $builder->toSql());
+    }
+
+    public function testWhereNullSafeEqualsMySql()
+    {
+        $builder = $this->getMySqlBuilder();
+        $builder->select('*')->from('users')->whereNullSafeEquals('foo', 'bar');
+        $this->assertSame('select * from `users` where `foo` <=> ?', $builder->toSql());
+        $this->assertEquals(['bar'], $builder->getBindings());
+
+        $builder = $this->getMySqlBuilder();
+        $builder->select('*')->from('users')->where('foo', '<=>', 'bar');
+        $this->assertSame('select * from `users` where `foo` <=> ?', $builder->toSql());
+        $this->assertEquals(['bar'], $builder->getBindings());
+    }
+
+    public function testWhereNullSafeEqualsSQLite()
+    {
+        $builder = $this->getSQLiteBuilder();
+        $builder->select('*')->from('users')->whereNullSafeEquals('foo', 'bar');
+        $this->assertSame('select * from "users" where "foo" is ?', $builder->toSql());
+        $this->assertEquals(['bar'], $builder->getBindings());
+
+        $builder = $this->getSQLiteBuilder();
+        $builder->select('*')->from('users')->where('foo', '<=>', 'bar');
+        $this->assertSame('select * from "users" where "foo" is ?', $builder->toSql());
+        $this->assertEquals(['bar'], $builder->getBindings());
+    }
+
+    public function testWhereNullSafeEqualsPostgres()
+    {
+        $builder = $this->getPostgresBuilder();
+        $builder->select('*')->from('users')->whereNullSafeEquals('foo', 'bar');
+        $this->assertSame('select * from "users" where "foo" is not distinct from ?', $builder->toSql());
+        $this->assertEquals(['bar'], $builder->getBindings());
+
+        $builder = $this->getPostgresBuilder();
+        $builder->select('*')->from('users')->where('foo', '<=>', 'bar');
+        $this->assertSame('select * from "users" where "foo" is not distinct from ?', $builder->toSql());
+        $this->assertEquals(['bar'], $builder->getBindings());
+    }
+
+    public function testWhereNullSafeEqualsSqlServer()
+    {
+        $builder = $this->getSqlServerBuilder();
+        $builder->select('*')->from('users')->whereNullSafeEquals('foo', 'bar');
+        $this->assertSame('select * from [users] where exists (select [foo] intersect select ?)', $builder->toSql());
+        $this->assertEquals(['bar'], $builder->getBindings());
+
+        $builder = $this->getSqlServerBuilder();
+        $builder->select('*')->from('users')->where('foo', '<=>', 'bar');
+        $this->assertSame('select * from [users] where exists (select [foo] intersect select ?)', $builder->toSql());
+        $this->assertEquals(['bar'], $builder->getBindings());
+    }
+
     public function testWhereBetweens()
     {
         $builder = $this->getBuilder();
@@ -1097,10 +1180,31 @@ class DatabaseQueryBuilderTest extends TestCase
         $this->assertSame('select * from "users" where "created_at" between ? and ?', $builder->toSql());
         $this->assertEquals([now()->startOfDay(), now()->addMonth()->startOfDay()], $builder->getBindings());
 
+        // DatePeriod with end date
+        $builder = $this->getBuilder();
+        $period = new \DatePeriod(now()->startOfDay(), new \DateInterval('P1D'), now()->addDays(5)->startOfDay());
+        $builder->select('*')->from('users')->whereBetween('created_at', $period);
+        $this->assertSame('select * from "users" where "created_at" between ? and ?', $builder->toSql());
+        $this->assertEquals([now()->startOfDay(), now()->addDays(5)->startOfDay()], $builder->getBindings());
+
+        // DatePeriod with recurrence count (no end date)
+        $builder = $this->getBuilder();
+        $period = new \DatePeriod(now()->startOfDay(), new \DateInterval('P1D'), 5);
+        $builder->select('*')->from('users')->whereBetween('created_at', $period);
+        $this->assertSame('select * from "users" where "created_at" between ? and ?', $builder->toSql());
+        $this->assertEquals([now()->startOfDay(), now()->addDays(5)->startOfDay()], $builder->getBindings());
+
         $builder = $this->getBuilder();
         $builder->select('*')->from('users')->whereBetween('id', collect([1, 2]));
         $this->assertSame('select * from "users" where "id" between ? and ?', $builder->toSql());
         $this->assertEquals([0 => 1, 1 => 2], $builder->getBindings());
+
+        $subqueryBuilder = $this->getBuilder();
+        $subqueryBuilder->select('id')->from('posts')->where('status', 'published')->orderByDesc('created_at')->limit(1);
+        $builder = $this->getBuilder();
+        $builder->select('*')->from('users')->whereBetween($subqueryBuilder, collect([1, 2]));
+        $this->assertSame('select * from "users" where (select "id" from "posts" where "status" = ? order by "created_at" desc limit 1) between ? and ?', $builder->toSql());
+        $this->assertEquals([0 => 'published', 1 => 1, 2 => 2], $builder->getBindings());
     }
 
     public function testOrWhereBetween()
@@ -1185,6 +1289,13 @@ class DatabaseQueryBuilderTest extends TestCase
         $builder->select('*')->from('users')->whereBetweenColumns('id', [new Raw(1), new Raw(2)]);
         $this->assertSame('select * from "users" where "id" between 1 and 2', $builder->toSql());
         $this->assertEquals([], $builder->getBindings());
+
+        $subqueryBuilder = $this->getBuilder();
+        $subqueryBuilder->select('created_at')->from('posts')->where('status', 'published')->orderByDesc('created_at')->limit(1);
+        $builder = $this->getBuilder();
+        $builder->select('*')->from('users')->whereBetweenColumns($subqueryBuilder, ['created_at', 'updated_at']);
+        $this->assertSame('select * from "users" where (select "created_at" from "posts" where "status" = ? order by "created_at" desc limit 1) between "created_at" and "updated_at"', $builder->toSql());
+        $this->assertEquals([0 => 'published'], $builder->getBindings());
     }
 
     public function testOrWhereBetweenColumns()
@@ -1590,6 +1701,31 @@ class DatabaseQueryBuilderTest extends TestCase
         $builder = $this->getPostgresBuilderWithProcessor();
         $builder->select('*')->from('users')->whereFullText(['body', 'title'], 'Car Plane');
         $this->assertSame('select * from "users" where (to_tsvector(\'english\', "body") || to_tsvector(\'english\', "title")) @@ plainto_tsquery(\'english\', ?)', $builder->toSql());
+        $this->assertEquals(['Car Plane'], $builder->getBindings());
+
+        $builder = $this->getPostgresBuilderWithProcessor();
+        $builder->select('*')->from('users')->whereFullText(['body', 'title'], 'Air | Plan:* -Car', ['mode' => 'raw']);
+        $this->assertSame('select * from "users" where (to_tsvector(\'english\', "body") || to_tsvector(\'english\', "title")) @@ to_tsquery(\'english\', ?)', $builder->toSql());
+        $this->assertEquals(['Air | Plan:* -Car'], $builder->getBindings());
+
+        $builder = $this->getPostgresBuilderWithProcessor();
+        $builder->select('*')->from('users')->whereFullText('search_vector', 'Hello World', ['vector' => true]);
+        $this->assertSame('select * from "users" where ("search_vector") @@ plainto_tsquery(\'english\', ?)', $builder->toSql());
+        $this->assertEquals(['Hello World'], $builder->getBindings());
+
+        $builder = $this->getPostgresBuilderWithProcessor();
+        $builder->select('*')->from('users')->whereFullText('search_vector_nl', 'Hello World', ['vector' => true, 'language' => 'dutch']);
+        $this->assertSame('select * from "users" where ("search_vector_nl") @@ plainto_tsquery(\'dutch\', ?)', $builder->toSql());
+        $this->assertEquals(['Hello World'], $builder->getBindings());
+
+        $builder = $this->getPostgresBuilderWithProcessor();
+        $builder->select('*')->from('users')->whereFullText('search_vector', '+Hello -World', ['vector' => true, 'mode' => 'websearch']);
+        $this->assertSame('select * from "users" where ("search_vector") @@ websearch_to_tsquery(\'english\', ?)', $builder->toSql());
+        $this->assertEquals(['+Hello -World'], $builder->getBindings());
+
+        $builder = $this->getPostgresBuilderWithProcessor();
+        $builder->select('*')->from('users')->whereFullText(['tsv_title', 'tsv_body'], 'Car Plane', ['vector' => true]);
+        $this->assertSame('select * from "users" where ("tsv_title" || "tsv_body") @@ plainto_tsquery(\'english\', ?)', $builder->toSql());
         $this->assertEquals(['Car Plane'], $builder->getBindings());
     }
 
@@ -2148,6 +2284,20 @@ class DatabaseQueryBuilderTest extends TestCase
         $this->assertSame('select * from "users" order by RANDOM()', $builder->toSql());
     }
 
+    public function testInRandomOrderMySqlGrammarWithoutSeed()
+    {
+        $builder = $this->getMySqlBuilder();
+        $builder->select('*')->from('users')->inRandomOrder();
+        $this->assertSame('select * from `users` order by RAND()', $builder->toSql());
+    }
+
+    public function testInRandomOrderMySqlGrammarWithSeed()
+    {
+        $builder = $this->getMySqlBuilder();
+        $builder->select('*')->from('users')->inRandomOrder(123);
+        $this->assertSame('select * from `users` order by RAND(123)', $builder->toSql());
+    }
+
     public function testInRandomOrderPostgres()
     {
         $builder = $this->getPostgresBuilder();
@@ -2160,6 +2310,77 @@ class DatabaseQueryBuilderTest extends TestCase
         $builder = $this->getSqlServerBuilder();
         $builder->select('*')->from('users')->inRandomOrder();
         $this->assertSame('select * from [users] order by NEWID()', $builder->toSql());
+    }
+
+    public function testInOrderOf()
+    {
+        $builder = $this->getBuilder();
+        $builder->select('*')->from('users')->inOrderOf('status', ['active', 'pending', 'inactive']);
+        $this->assertSame('select * from "users" order by case when "status" = ? then 0 when "status" = ? then 1 when "status" = ? then 2 else 3 end', $builder->toSql());
+        $this->assertEquals(['active', 'pending', 'inactive'], $builder->getBindings());
+    }
+
+    public function testInOrderOfWithExistingOrders()
+    {
+        $builder = $this->getBuilder();
+        $builder->select('*')->from('users')->inOrderOf('status', ['active', 'pending'])->orderBy('name');
+        $this->assertSame('select * from "users" order by case when "status" = ? then 0 when "status" = ? then 1 else 2 end, "name" asc', $builder->toSql());
+        $this->assertEquals(['active', 'pending'], $builder->getBindings());
+    }
+
+    public function testInOrderOfWithEmptyValues()
+    {
+        $builder = $this->getBuilder();
+        $builder->select('*')->from('users')->inOrderOf('status', []);
+        $this->assertSame('select * from "users"', $builder->toSql());
+    }
+
+    public function testInOrderOfWithSingleValue()
+    {
+        $builder = $this->getBuilder();
+        $builder->select('*')->from('users')->inOrderOf('status', ['active']);
+        $this->assertSame('select * from "users" order by case when "status" = ? then 0 else 1 end', $builder->toSql());
+        $this->assertEquals(['active'], $builder->getBindings());
+    }
+
+    public function testInOrderOfMySql()
+    {
+        $builder = $this->getMySqlBuilder();
+        $builder->select('*')->from('users')->inOrderOf('status', ['active', 'pending']);
+        $this->assertSame('select * from `users` order by case when `status` = ? then 0 when `status` = ? then 1 else 2 end', $builder->toSql());
+        $this->assertEquals(['active', 'pending'], $builder->getBindings());
+    }
+
+    public function testInOrderOfPostgres()
+    {
+        $builder = $this->getPostgresBuilder();
+        $builder->select('*')->from('users')->inOrderOf('status', ['active', 'pending']);
+        $this->assertSame('select * from "users" order by case when "status" = ? then 0 when "status" = ? then 1 else 2 end', $builder->toSql());
+        $this->assertEquals(['active', 'pending'], $builder->getBindings());
+    }
+
+    public function testInOrderOfSqlServer()
+    {
+        $builder = $this->getSqlServerBuilder();
+        $builder->select('*')->from('users')->inOrderOf('status', ['active', 'pending']);
+        $this->assertSame('select * from [users] order by case when [status] = ? then 0 when [status] = ? then 1 else 2 end', $builder->toSql());
+        $this->assertEquals(['active', 'pending'], $builder->getBindings());
+    }
+
+    public function testInOrderOfWithIntegerValues()
+    {
+        $builder = $this->getBuilder();
+        $builder->select('*')->from('users')->inOrderOf('id', [5, 2, 8]);
+        $this->assertSame('select * from "users" order by case when "id" = ? then 0 when "id" = ? then 1 when "id" = ? then 2 else 3 end', $builder->toSql());
+        $this->assertEquals([5, 2, 8], $builder->getBindings());
+    }
+
+    public function testInOrderOfWithWhereClause()
+    {
+        $builder = $this->getBuilder();
+        $builder->select('*')->from('users')->where('active', true)->inOrderOf('status', ['pending', 'approved']);
+        $this->assertSame('select * from "users" where "active" = ? order by case when "status" = ? then 0 when "status" = ? then 1 else 2 end', $builder->toSql());
+        $this->assertEquals([true, 'pending', 'approved'], $builder->getBindings());
     }
 
     public function testOrderBysSqlServer()
@@ -4364,9 +4585,15 @@ class DatabaseQueryBuilderTest extends TestCase
     public function testUpdateMethodWorksWithQueryAsValue()
     {
         $builder = $this->getBuilder();
+        $subQueryBuilder = $this->getBuilder();
         $builder->getConnection()->shouldReceive('update')->once()->with('update "users" set "credits" = (select sum(credits) from "transactions" where "transactions"."user_id" = "users"."id" and "type" = ?) where "id" = ?', ['foo', 1])->andReturn(1);
-        $result = $builder->from('users')->where('id', '=', 1)->update(['credits' => $this->getBuilder()->from('transactions')->selectRaw('sum(credits)')->whereColumn('transactions.user_id', 'users.id')->where('type', 'foo')]);
+        $result = $builder->from('users')->where('id', '=', 1)->update(['credits' => $subQueryBuilder->from('transactions')->selectRaw('sum(credits)')->whereColumn('transactions.user_id', 'users.id')->where('type', 'foo')]);
+        $this->assertEquals(1, $result);
 
+        $builder = $this->getBuilder();
+        $subQueryBuilder = new EloquentBuilder($this->getBuilder());
+        $builder->getConnection()->shouldReceive('update')->once()->with('update "users" set "credits" = (select sum(credits) from "transactions" where "transactions"."user_id" = "users"."id" and "type" = ?) where "id" = ?', ['foo', 1])->andReturn(1);
+        $result = $builder->from('users')->where('id', '=', 1)->update(['credits' => $subQueryBuilder->from('transactions')->selectRaw('sum(credits)')->whereColumn('transactions.user_id', 'users.id')->where('type', 'foo')]);
         $this->assertEquals(1, $result);
     }
 
@@ -5428,6 +5655,29 @@ SQL;
 
         $this->assertSame('select * from "one"', $builder->toSql());
         $this->assertEquals([], $builder->getBindings());
+    }
+
+    public function testSelectExpression()
+    {
+        $builder = $this->getBuilder();
+        $builder->from('one')
+            ->selectExpression(new Raw('1 + 1'), 'expr')
+            ->selectExpression('2 + 2', 'expr2');
+
+        $this->assertSame('select (1 + 1) as "expr", (2 + 2) as "expr2" from "one"', $builder->toSql());
+    }
+
+    public function testSelect()
+    {
+        $builder = $this->getBuilder();
+        $builder->from('one')->select([
+            'two',
+            'three' => 'threee as threeee',
+            'four' => $this->getBuilder()->from('tbl')->select('col'),
+            'five' => new Raw('1 + 1'),
+        ]);
+
+        $this->assertSame('select "two", "threee" as "threeee", (select "col" from "tbl") as "four", 1 + 1 from "one"', $builder->toSql());
     }
 
     public function testSqlServerWhereDate()
@@ -7066,7 +7316,7 @@ SQL;
     {
         $builder = $this->getSqlServerBuilder();
         $builder->select('foo')->from('users')->forceIndex('test_index');
-        $this->assertSame('select [foo] from [users] with (index(test_index))', $builder->toSql());
+        $this->assertSame('select [foo] from [users] with (index([test_index]))', $builder->toSql());
     }
 
     public function testIgnoreIndexSqlServer()

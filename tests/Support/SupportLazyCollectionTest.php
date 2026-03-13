@@ -186,6 +186,8 @@ class SupportLazyCollectionTest extends TestCase
 
         $mock = m::mock(LazyCollection::class.'[now]');
 
+        $timedOutWith = [];
+
         $results = $mock
             ->times(10)
             ->tap(function ($collection) use ($mock, $timeout) {
@@ -200,12 +202,13 @@ class SupportLazyCollectionTest extends TestCase
                         $timeout->getTimestamp()
                     );
             })
-            ->takeUntilTimeout($timeout)
+            ->takeUntilTimeout($timeout, function ($value, $key) use (&$timedOutWith) {
+                $timedOutWith = [$value, $key];
+            })
             ->all();
 
         $this->assertSame([1, 2], $results);
-
-        m::close();
+        $this->assertSame([2, 1], $timedOutWith);
     }
 
     public function testTapEach()
@@ -387,6 +390,21 @@ class SupportLazyCollectionTest extends TestCase
         $this->assertFalse($multipleCollection->containsOneItem());
     }
 
+    public function testContainsManyItems()
+    {
+        $emptyCollection = new LazyCollection([]);
+        $this->assertFalse($emptyCollection->containsManyItems());
+
+        $singleCollection = new LazyCollection([1]);
+        $this->assertFalse($singleCollection->containsManyItems());
+
+        $multipleCollection = new LazyCollection([1, 2]);
+        $this->assertTrue($multipleCollection->containsManyItems());
+
+        $manyCollection = new LazyCollection([1, 2, 3]);
+        $this->assertTrue($manyCollection->containsManyItems());
+    }
+
     public function testDoesntContain()
     {
         $collection = new LazyCollection([1, 2, 3, 4, 5]);
@@ -446,5 +464,71 @@ class SupportLazyCollectionTest extends TestCase
         ];
 
         $this->assertEquals($expected, $dotted->all());
+    }
+
+    public function testWithHeartbeat()
+    {
+        $start = Carbon::create(2000, 1, 1);
+        $after2Minutes = $start->copy()->addMinutes(2);
+        $after5Minutes = $start->copy()->addMinutes(5);
+        $after7Minutes = $start->copy()->addMinutes(7);
+        $after11Minutes = $start->copy()->addMinutes(11);
+
+        Carbon::setTestNow($start);
+
+        $output = new Collection();
+
+        $numbers = LazyCollection::range(1, 10)
+
+            // Move the clock to possibly trigger the heartbeat...
+            ->tapEach(fn ($number) => Carbon::setTestNow(
+                match ($number) {
+                    3 => $after2Minutes,
+                    4 => $after5Minutes,
+                    6 => $after7Minutes,
+                    9 => $after11Minutes,
+                    default => Carbon::now(),
+                }
+            ))
+
+            // Push the current date to `output` when heartbeat is triggered...
+            ->withHeartbeat(Duration::minutes(5), fn () => $output[] = Carbon::now())
+
+            // Push every number onto `output` as it's enumerated...
+            ->tapEach(fn ($number) => $output[] = $number)->all();
+
+        $this->assertEquals(range(1, 10), $numbers);
+
+        $this->assertEquals(
+            [
+                1, 2, 3,
+                $after5Minutes,
+                4, 5, 6, 7, 8,
+                $after11Minutes,
+                9, 10,
+            ],
+            $output->all(),
+        );
+
+        Carbon::setTestNow();
+    }
+
+    public function testRandomPreservesKeys()
+    {
+        $collection = new LazyCollection([
+            'first' => 1,
+            'second' => 2,
+            'third' => 3,
+        ]);
+
+        $keysWithoutPreserve = array_keys($collection->random(2)->all());
+
+        $this->assertEquals([0, 1], $keysWithoutPreserve);
+
+        $keysWithPreserve = array_keys($collection->random(2, true)->all());
+
+        foreach ($keysWithPreserve as $key) {
+            $this->assertContains($key, ['first', 'second', 'third']);
+        }
     }
 }
