@@ -811,6 +811,9 @@ trait HasAttributes
 
         $this->casts = array_merge($this->casts, $casts);
 
+        $this->isDateAttributeCache = [];
+        $this->isEncryptedCastableCache = [];
+
         return $this;
     }
 
