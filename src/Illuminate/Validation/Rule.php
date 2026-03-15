@@ -346,6 +346,20 @@ class Rule
     }
 
     /**
+     * Cached undotted data from the last compile call.
+     *
+     * @var array|null
+     */
+    protected static $lastCompileData = null;
+
+    /**
+     * The undotted result for the cached compile data.
+     *
+     * @var array|null
+     */
+    protected static $lastCompileUndotted = null;
+
+    /**
      * Compile a set of rules for an attribute.
      *
      * @param  string  $attribute
@@ -355,9 +369,19 @@ class Rule
      */
     public static function compile($attribute, $rules, $data = null)
     {
-        $parser = new ValidationRuleParser(
-            Arr::undot(Arr::wrap($data))
-        );
+        // Cache the undotted data since compile() is often called repeatedly
+        // with the same $data (e.g. when using Rule::forEach over many items).
+        if ($data === null) {
+            $undotted = [];
+        } elseif ($data === static::$lastCompileData) {
+            $undotted = static::$lastCompileUndotted;
+        } else {
+            $undotted = Arr::undot(Arr::wrap($data));
+            static::$lastCompileData = $data;
+            static::$lastCompileUndotted = $undotted;
+        }
+
+        $parser = new ValidationRuleParser($undotted);
 
         if (is_array($rules) && ! array_is_list($rules)) {
             $nested = [];
@@ -372,5 +396,16 @@ class Rule
         }
 
         return $parser->explode(ValidationRuleParser::filterConditionalRules($rules, $data));
+    }
+
+    /**
+     * Flush the rule's global state.
+     *
+     * @return void
+     */
+    public static function flushState()
+    {
+        static::$lastCompileData = null;
+        static::$lastCompileUndotted = null;
     }
 }
