@@ -194,9 +194,9 @@ trait HasAttributes
     /**
      * Cached result of getCasts() when incrementing is enabled.
      *
-     * @var \WeakMap|null
+     * @var array|null
      */
-    protected static $mergedCastsCache;
+    protected $mergedCastsCache = null;
 
     /**
      * The encrypter instance that is used to encrypt attributes.
@@ -804,9 +804,7 @@ trait HasAttributes
 
         $this->casts = array_merge($this->casts, $casts);
 
-        if (static::$mergedCastsCache !== null) {
-            unset(static::$mergedCastsCache[$this]);
-        }
+        $this->mergedCastsCache = null;
 
         return $this;
     }
@@ -1723,9 +1721,7 @@ trait HasAttributes
     public function getCasts()
     {
         if ($this->getIncrementing()) {
-            $cache = (static::$mergedCastsCache ??= new \WeakMap);
-
-            return $cache[$this] ??= array_merge([$this->getKeyName() => $this->getKeyType()], $this->casts);
+            return $this->mergedCastsCache ??= array_merge([$this->getKeyName() => $this->getKeyType()], $this->casts);
         }
 
         return $this->casts;
