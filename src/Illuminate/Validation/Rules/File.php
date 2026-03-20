@@ -3,6 +3,7 @@
 namespace Illuminate\Validation\Rules;
 
 use Illuminate\Contracts\Validation\DataAwareRule;
+use Illuminate\Contracts\Validation\ImplicitRule;
 use Illuminate\Contracts\Validation\Rule;
 use Illuminate\Contracts\Validation\ValidatorAwareRule;
 use Illuminate\Support\Arr;
@@ -10,11 +11,12 @@ use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Str;
 use Illuminate\Support\Traits\Conditionable;
 use Illuminate\Support\Traits\Macroable;
+use Illuminate\Validation\Rules\Concerns\HasFieldModifiers;
 use InvalidArgumentException;
 
-class File implements Rule, DataAwareRule, ValidatorAwareRule
+class File implements DataAwareRule, ImplicitRule, Rule, ValidatorAwareRule
 {
-    use Conditionable, Macroable;
+    use Conditionable, HasFieldModifiers, Macroable;
 
     /**
      * The MIME types that the given file should match. This array may also contain file extensions.
@@ -57,6 +59,11 @@ class File implements Rule, DataAwareRule, ValidatorAwareRule
      * @var array
      */
     protected $customRules = [];
+
+    /**
+     * The field modifiers for the rule.
+     */
+    protected array $modifiers = [];
 
     /**
      * The error message after validation, if any.
@@ -254,6 +261,37 @@ class File implements Rule, DataAwareRule, ValidatorAwareRule
     }
 
     /**
+     * Limit the uploaded file to the given file extensions.
+     *
+     * Despite the name, this validates by file extension (e.g., 'pdf', 'doc'),
+     * not by MIME type. Values containing a '/' are treated as MIME types instead.
+     *
+     * @param  string  ...$mimes
+     * @return $this
+     */
+    public function mimes(string ...$mimes): static
+    {
+        $this->allowedMimetypes = array_merge($this->allowedMimetypes, $mimes);
+
+        return $this;
+    }
+
+    /**
+     * Limit the uploaded file to the given MIME types.
+     *
+     * Validates the actual file content type (e.g., 'application/pdf', 'image/png').
+     *
+     * @param  string  ...$types
+     * @return $this
+     */
+    public function mimetypes(string ...$types): static
+    {
+        $this->allowedMimetypes = array_merge($this->allowedMimetypes, $types);
+
+        return $this;
+    }
+
+    /**
      * Specify additional validation rules that should be merged with the default rules during validation.
      *
      * @param  string|array  $rules
@@ -277,6 +315,16 @@ class File implements Rule, DataAwareRule, ValidatorAwareRule
     {
         $this->messages = [];
 
+        $hasPresenceModifier = ! empty(array_intersect($this->modifiers, [
+            'required', 'sometimes', 'nullable',
+        ])) || ! empty(array_filter($this->modifiers, fn ($m) => is_string($m) && (
+            str_starts_with($m, 'required_') || str_starts_with($m, 'exclude')
+        )));
+
+        if (! $hasPresenceModifier && ! Arr::has($this->data ?? [], $attribute)) {
+            return true;
+        }
+
         $validator = Validator::make(
             $this->data,
             [$attribute => $this->buildValidationRules()],
@@ -298,7 +346,7 @@ class File implements Rule, DataAwareRule, ValidatorAwareRule
      */
     protected function buildValidationRules()
     {
-        $rules = ['file'];
+        $rules = [...$this->modifiers, 'file'];
 
         $rules = array_merge($rules, $this->buildMimetypes());
 
@@ -397,6 +445,20 @@ class File implements Rule, DataAwareRule, ValidatorAwareRule
     public function setData($data)
     {
         $this->data = $data;
+
+        return $this;
+    }
+
+    /**
+     * {@inheritdoc}
+     */
+    protected function addRule(array|string|object $rules): static
+    {
+        if (is_object($rules)) {
+            $this->modifiers[] = $rules;
+        } else {
+            $this->modifiers = array_merge($this->modifiers, Arr::wrap($rules));
+        }
 
         return $this;
     }

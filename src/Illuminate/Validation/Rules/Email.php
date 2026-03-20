@@ -3,17 +3,20 @@
 namespace Illuminate\Validation\Rules;
 
 use Illuminate\Contracts\Validation\DataAwareRule;
+use Illuminate\Contracts\Validation\ImplicitRule;
 use Illuminate\Contracts\Validation\Rule;
 use Illuminate\Contracts\Validation\ValidatorAwareRule;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Traits\Conditionable;
 use Illuminate\Support\Traits\Macroable;
+use Illuminate\Validation\Rules\Concerns\HasEmbeddedRules;
+use Illuminate\Validation\Rules\Concerns\HasFieldModifiers;
 use InvalidArgumentException;
 
-class Email implements Rule, DataAwareRule, ValidatorAwareRule
+class Email implements DataAwareRule, ImplicitRule, Rule, ValidatorAwareRule
 {
-    use Conditionable, Macroable;
+    use Conditionable, HasEmbeddedRules, HasFieldModifiers, Macroable;
 
     public bool $validateMxRecord = false;
     public bool $preventSpoofing = false;
@@ -42,6 +45,11 @@ class Email implements Rule, DataAwareRule, ValidatorAwareRule
      * @var array
      */
     protected $customRules = [];
+
+    /**
+     * The field modifiers for the rule.
+     */
+    protected array $modifiers = [];
 
     /**
      * The error message after validation, if any.
@@ -167,6 +175,20 @@ class Email implements Rule, DataAwareRule, ValidatorAwareRule
     }
 
     /**
+     * The field under validation must not exceed the given length.
+     *
+     * This is the only string constraint added directly to Email, because
+     * it's the single most common companion rule. All other string
+     * constraints should use the escape hatch: ->rule('min:5')
+     */
+    public function max(int $value): static
+    {
+        $this->customRules[] = 'max:'.$value;
+
+        return $this;
+    }
+
+    /**
      * Specify additional validation rules that should be merged with the default rules during validation.
      *
      * @param  string|array  $rules
@@ -189,6 +211,16 @@ class Email implements Rule, DataAwareRule, ValidatorAwareRule
     public function passes($attribute, $value)
     {
         $this->messages = [];
+
+        $hasPresenceModifier = ! empty(array_intersect($this->modifiers, [
+            'required', 'sometimes', 'nullable',
+        ])) || ! empty(array_filter($this->modifiers, fn ($m) => is_string($m) && (
+            str_starts_with($m, 'required_') || str_starts_with($m, 'exclude')
+        )));
+
+        if (! $hasPresenceModifier && ! Arr::has($this->data ?? [], $attribute)) {
+            return true;
+        }
 
         $validator = Validator::make(
             $this->data,
@@ -213,36 +245,38 @@ class Email implements Rule, DataAwareRule, ValidatorAwareRule
      */
     protected function buildValidationRules()
     {
-        $rules = [];
+        $emailFlags = [];
 
         if ($this->rfcCompliant) {
-            $rules[] = 'rfc';
+            $emailFlags[] = 'rfc';
         }
 
         if ($this->strictRfcCompliant) {
-            $rules[] = 'strict';
+            $emailFlags[] = 'strict';
         }
 
         if ($this->validateMxRecord) {
-            $rules[] = 'dns';
+            $emailFlags[] = 'dns';
         }
 
         if ($this->preventSpoofing) {
-            $rules[] = 'spoof';
+            $emailFlags[] = 'spoof';
         }
 
         if ($this->nativeValidation) {
-            $rules[] = 'filter';
+            $emailFlags[] = 'filter';
         }
 
         if ($this->nativeValidationWithUnicodeAllowed) {
-            $rules[] = 'filter_unicode';
+            $emailFlags[] = 'filter_unicode';
         }
 
-        if ($rules) {
-            $rules = ['email:'.implode(',', $rules)];
+        $rules = [...$this->modifiers];
+
+        if ($emailFlags) {
+            $rules[] = 'email:'.implode(',', $emailFlags);
         } else {
-            $rules = ['email'];
+            $rules[] = 'email';
         }
 
         return array_merge(array_filter($rules), $this->customRules);
@@ -280,6 +314,20 @@ class Email implements Rule, DataAwareRule, ValidatorAwareRule
     public function setData($data)
     {
         $this->data = $data;
+
+        return $this;
+    }
+
+    /**
+     * {@inheritdoc}
+     */
+    protected function addRule(array|string|object $rules): static
+    {
+        if (is_object($rules)) {
+            $this->modifiers[] = $rules;
+        } else {
+            $this->modifiers = array_merge($this->modifiers, Arr::wrap($rules));
+        }
 
         return $this;
     }

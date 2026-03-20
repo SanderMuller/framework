@@ -12,13 +12,14 @@ use Illuminate\Contracts\Validation\ValidatorAwareRule;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Traits\Conditionable;
+use Illuminate\Validation\Rules\Concerns\HasFieldModifiers;
 use InvalidArgumentException;
 use IteratorAggregate;
 use Traversable;
 
 class Password implements DataAwareRule, ImplicitRule, IteratorAggregate, Rule, ValidatorAwareRule
 {
-    use Conditionable;
+    use Conditionable, HasFieldModifiers;
 
     /**
      * The validator performing the validation.
@@ -49,18 +50,9 @@ class Password implements DataAwareRule, ImplicitRule, IteratorAggregate, Rule, 
     protected $max;
 
     /**
-     * If the password is required.
-     *
-     * @var bool
+     * The field modifiers for the rule.
      */
-    protected $required = false;
-
-    /**
-     * If the password should only be validated when present.
-     *
-     * @var bool
-     */
-    protected $sometimes = false;
+    protected array $modifiers = [];
 
     /**
      * If the password requires at least one uppercase and one lowercase letter.
@@ -179,11 +171,7 @@ class Password implements DataAwareRule, ImplicitRule, IteratorAggregate, Rule, 
      */
     public static function required()
     {
-        $password = static::default();
-
-        $password->required = true;
-
-        return $password;
+        return static::default()->addRule('required');
     }
 
     /**
@@ -193,11 +181,7 @@ class Password implements DataAwareRule, ImplicitRule, IteratorAggregate, Rule, 
      */
     public static function sometimes()
     {
-        $password = static::default();
-
-        $password->sometimes = true;
-
-        return $password;
+        return static::default()->addRule('sometimes');
     }
 
     /**
@@ -337,11 +321,14 @@ class Password implements DataAwareRule, ImplicitRule, IteratorAggregate, Rule, 
     {
         $this->messages = [];
 
-        if (! $this->required && ! $this->sometimes && ! Arr::has($this->data ?? [], $attribute)) {
+        $isRequired = in_array('required', $this->modifiers);
+        $isSometimes = in_array('sometimes', $this->modifiers);
+
+        if (! $isRequired && ! $isSometimes && ! Arr::has($this->data ?? [], $attribute)) {
             return true;
         }
 
-        if (blank($value) && ! $this->required && $this->validator?->hasRule($attribute, ['Nullable'])) {
+        if (blank($value) && ! $isRequired && (in_array('nullable', $this->modifiers) || $this->validator?->hasRule($attribute, ['Nullable']))) {
             return true;
         }
 
@@ -439,12 +426,25 @@ class Password implements DataAwareRule, ImplicitRule, IteratorAggregate, Rule, 
     public function getIterator(): Traversable
     {
         return new ArrayIterator([
-            ...($this->required ? ['required'] : []),
-            ...($this->sometimes ? ['sometimes'] : []),
+            ...$this->modifiers,
             'string',
             'min:'.$this->min,
             ...($this->max ? ['max:'.$this->max] : []),
             ...$this->customRules,
         ]);
+    }
+
+    /**
+     * {@inheritdoc}
+     */
+    protected function addRule(array|string|object $rules): static
+    {
+        if (is_object($rules)) {
+            $this->modifiers[] = $rules;
+        } else {
+            $this->modifiers = array_merge($this->modifiers, Arr::wrap($rules));
+        }
+
+        return $this;
     }
 }

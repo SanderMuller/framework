@@ -3,14 +3,18 @@
 namespace Illuminate\Validation\Rules;
 
 use DateTimeInterface;
-use Illuminate\Support\Arr;
+use Illuminate\Contracts\Validation\FluentRule;
 use Illuminate\Support\Traits\Conditionable;
 use Illuminate\Support\Traits\Macroable;
+use Illuminate\Validation\Rules\Concerns\HasEmbeddedRules;
+use Illuminate\Validation\Rules\Concerns\HasFieldModifiers;
+use IteratorAggregate;
 use Stringable;
+use Traversable;
 
-class Date implements Stringable
+class Date implements FluentRule, IteratorAggregate, Stringable
 {
-    use Conditionable, Macroable;
+    use Conditionable, HasEmbeddedRules, HasFieldModifiers, Macroable;
 
     /**
      * The format of the date.
@@ -18,7 +22,7 @@ class Date implements Stringable
     protected ?string $format = null;
 
     /**
-     * The constraints for the date rule.
+     * The string constraints for the date rule.
      */
     protected array $constraints = [];
 
@@ -145,13 +149,27 @@ class Date implements Stringable
     }
 
     /**
-     * Add custom rules to the validation rules array.
+     * The field under validation must equal the given date.
      */
-    protected function addRule(array|string $rules): static
+    public function dateEquals(DateTimeInterface|string $date): static
     {
-        $this->constraints = array_merge($this->constraints, Arr::wrap($rules));
+        return $this->addRule('date_equals:'.$this->formatDate($date));
+    }
 
-        return $this;
+    /**
+     * The field under validation must have the same value as the given field.
+     */
+    public function same(string $field): static
+    {
+        return $this->addRule('same:'.$field);
+    }
+
+    /**
+     * The field under validation must have a different value than the given field.
+     */
+    public function different(string $field): static
+    {
+        return $this->addRule('different:'.$field);
     }
 
     /**
@@ -165,13 +183,36 @@ class Date implements Stringable
     }
 
     /**
+     * Get an iterator for the validation rules.
+     */
+    public function getIterator(): Traversable
+    {
+        return new \ArrayIterator([
+            $this->format === null ? 'date' : 'date_format:'.$this->format,
+            ...array_unique($this->constraints),
+            ...$this->rules,
+        ]);
+    }
+
+    /**
      * Convert the rule to a validation string.
+     *
+     * Lossy — only returns string constraints. Embedded rule objects
+     * are NOT included. The parser uses getIterator() which returns
+     * everything.
      */
     public function __toString(): string
     {
-        return implode('|', [
+        if (! empty($this->rules)) {
+            trigger_error(
+                'Casting '.static::class.' to string discards embedded rule objects. Use the rule object directly instead of casting to string.',
+                E_USER_DEPRECATED,
+            );
+        }
+
+        return implode('|', array_unique([
             $this->format === null ? 'date' : 'date_format:'.$this->format,
             ...$this->constraints,
-        ]);
+        ]));
     }
 }

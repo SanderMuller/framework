@@ -4,16 +4,14 @@ namespace Illuminate\Validation;
 
 use Closure;
 use Illuminate\Contracts\Validation\CompilableRules;
+use Illuminate\Contracts\Validation\FluentRule;
 use Illuminate\Contracts\Validation\InvokableRule;
 use Illuminate\Contracts\Validation\Rule as RuleContract;
 use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Str;
-use Illuminate\Validation\Rules\Date;
 use Illuminate\Validation\Rules\Exists;
-use Illuminate\Validation\Rules\Numeric;
-use Illuminate\Validation\Rules\StringRule;
 use Illuminate\Validation\Rules\Unique;
 
 class ValidationRuleParser
@@ -95,8 +93,8 @@ class ValidationRuleParser
         }
 
         if (is_object($rule)) {
-            if ($rule instanceof Date || $rule instanceof Numeric || $rule instanceof StringRule) {
-                return explode('|', (string) $rule);
+            if ($rule instanceof FluentRule) {
+                return $this->explodeFluentRule($rule, $attribute);
             }
 
             return Arr::wrap($this->prepareRule($rule, $attribute));
@@ -105,11 +103,29 @@ class ValidationRuleParser
         $rules = [];
 
         foreach ($rule as $value) {
-            if ($value instanceof Date || $value instanceof Numeric || $value instanceof StringRule) {
-                $rules = array_merge($rules, explode('|', (string) $value));
+            if ($value instanceof FluentRule) {
+                $rules = array_merge($rules, $this->explodeFluentRule($value, $attribute));
             } else {
                 $rules[] = $this->prepareRule($value, $attribute);
             }
+        }
+
+        return $rules;
+    }
+
+    /**
+     * Explode a fluent rule into an array of individual rules.
+     *
+     * @param  \Illuminate\Contracts\Validation\FluentRule  $rule
+     * @param  string  $attribute
+     * @return array
+     */
+    protected function explodeFluentRule(FluentRule $rule, $attribute)
+    {
+        $rules = [];
+
+        foreach ($rule as $r) {
+            $rules[] = is_string($r) ? $r : $this->prepareRule($r, $attribute);
         }
 
         return $rules;

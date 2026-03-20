@@ -7,6 +7,7 @@ use Illuminate\Support\Arr;
 use Illuminate\Support\Traits\Macroable;
 use Illuminate\Validation\Rules\AnyOf;
 use Illuminate\Validation\Rules\ArrayRule;
+use Illuminate\Validation\Rules\BooleanRule;
 use Illuminate\Validation\Rules\Can;
 use Illuminate\Validation\Rules\Date;
 use Illuminate\Validation\Rules\Dimensions;
@@ -290,6 +291,16 @@ class Rule
     public static function string()
     {
         return new StringRule;
+    }
+
+    /**
+     * Get a boolean rule builder instance.
+     *
+     * @return \Illuminate\Validation\Rules\BooleanRule
+     */
+    public static function boolean()
+    {
+        return new BooleanRule;
     }
 
     /**

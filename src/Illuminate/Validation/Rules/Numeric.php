@@ -2,16 +2,21 @@
 
 namespace Illuminate\Validation\Rules;
 
-use Illuminate\Support\Arr;
+use Illuminate\Contracts\Validation\FluentRule;
 use Illuminate\Support\Traits\Conditionable;
+use Illuminate\Support\Traits\Macroable;
+use Illuminate\Validation\Rules\Concerns\HasEmbeddedRules;
+use Illuminate\Validation\Rules\Concerns\HasFieldModifiers;
+use IteratorAggregate;
 use Stringable;
+use Traversable;
 
-class Numeric implements Stringable
+class Numeric implements FluentRule, IteratorAggregate, Stringable
 {
-    use Conditionable;
+    use Conditionable, HasEmbeddedRules, HasFieldModifiers, Macroable;
 
     /**
-     * The constraints for the number rule.
+     * The string constraints for the number rule.
      */
     protected array $constraints = ['numeric'];
 
@@ -22,7 +27,7 @@ class Numeric implements Stringable
      * @param  int|float  $max
      * @return $this
      */
-    public function between(int|float $min, int|float $max): Numeric
+    public function between(int|float $min, int|float $max): static
     {
         return $this->addRule('between:'.$min.','.$max);
     }
@@ -34,7 +39,7 @@ class Numeric implements Stringable
      * @param  int|null  $max
      * @return $this
      */
-    public function decimal(int $min, ?int $max = null): Numeric
+    public function decimal(int $min, ?int $max = null): static
     {
         $rule = 'decimal:'.$min;
 
@@ -51,7 +56,7 @@ class Numeric implements Stringable
      * @param  string  $field
      * @return $this
      */
-    public function different(string $field): Numeric
+    public function different(string $field): static
     {
         return $this->addRule('different:'.$field);
     }
@@ -62,7 +67,7 @@ class Numeric implements Stringable
      * @param  int  $length
      * @return $this
      */
-    public function digits(int $length): Numeric
+    public function digits(int $length): static
     {
         return $this->integer()->addRule('digits:'.$length);
     }
@@ -74,7 +79,7 @@ class Numeric implements Stringable
      * @param  int  $max
      * @return $this
      */
-    public function digitsBetween(int $min, int $max): Numeric
+    public function digitsBetween(int $min, int $max): static
     {
         return $this->integer()->addRule('digits_between:'.$min.','.$max);
     }
@@ -85,7 +90,7 @@ class Numeric implements Stringable
      * @param  string  $field
      * @return $this
      */
-    public function greaterThan(string $field): Numeric
+    public function greaterThan(string $field): static
     {
         return $this->addRule('gt:'.$field);
     }
@@ -96,7 +101,7 @@ class Numeric implements Stringable
      * @param  string  $field
      * @return $this
      */
-    public function greaterThanOrEqualTo(string $field): Numeric
+    public function greaterThanOrEqualTo(string $field): static
     {
         return $this->addRule('gte:'.$field);
     }
@@ -106,7 +111,7 @@ class Numeric implements Stringable
      *
      * @return $this
      */
-    public function integer(bool $strict = false): Numeric
+    public function integer(bool $strict = false): static
     {
         return $this->addRule($strict ? 'integer:strict' : 'integer');
     }
@@ -117,7 +122,7 @@ class Numeric implements Stringable
      * @param  string  $field
      * @return $this
      */
-    public function lessThan(string $field): Numeric
+    public function lessThan(string $field): static
     {
         return $this->addRule('lt:'.$field);
     }
@@ -128,7 +133,7 @@ class Numeric implements Stringable
      * @param  string  $field
      * @return $this
      */
-    public function lessThanOrEqualTo(string $field): Numeric
+    public function lessThanOrEqualTo(string $field): static
     {
         return $this->addRule('lte:'.$field);
     }
@@ -139,7 +144,7 @@ class Numeric implements Stringable
      * @param  int|float  $value
      * @return $this
      */
-    public function max(int|float $value): Numeric
+    public function max(int|float $value): static
     {
         return $this->addRule('max:'.$value);
     }
@@ -150,7 +155,7 @@ class Numeric implements Stringable
      * @param  int  $value
      * @return $this
      */
-    public function maxDigits(int $value): Numeric
+    public function maxDigits(int $value): static
     {
         return $this->addRule('max_digits:'.$value);
     }
@@ -161,7 +166,7 @@ class Numeric implements Stringable
      * @param  int|float  $value
      * @return $this
      */
-    public function min(int|float $value): Numeric
+    public function min(int|float $value): static
     {
         return $this->addRule('min:'.$value);
     }
@@ -172,7 +177,7 @@ class Numeric implements Stringable
      * @param  int  $value
      * @return $this
      */
-    public function minDigits(int $value): Numeric
+    public function minDigits(int $value): static
     {
         return $this->addRule('min_digits:'.$value);
     }
@@ -183,7 +188,7 @@ class Numeric implements Stringable
      * @param  int|float  $value
      * @return $this
      */
-    public function multipleOf(int|float $value): Numeric
+    public function multipleOf(int|float $value): static
     {
         return $this->addRule('multiple_of:'.$value);
     }
@@ -194,7 +199,7 @@ class Numeric implements Stringable
      * @param  string  $field
      * @return $this
      */
-    public function same(string $field): Numeric
+    public function same(string $field): static
     {
         return $this->addRule('same:'.$field);
     }
@@ -205,26 +210,70 @@ class Numeric implements Stringable
      * @param  int  $value
      * @return $this
      */
-    public function exactly(int $value): Numeric
+    public function exactly(int $value): static
     {
         return $this->integer()->addRule('size:'.$value);
     }
 
     /**
-     * Convert the rule to a validation string.
+     * The field under validation must match the value of the confirmation field.
      */
-    public function __toString(): string
+    public function confirmed(): static
     {
-        return implode('|', array_unique($this->constraints));
+        return $this->addRule('confirmed');
     }
 
     /**
-     * Add custom rules to the validation rules array.
+     * The field under validation must exist in another field's array.
      */
-    protected function addRule(array|string $rules): Numeric
+    public function inArray(string $field): static
     {
-        $this->constraints = array_merge($this->constraints, Arr::wrap($rules));
+        return $this->addRule('in_array:'.$field);
+    }
 
-        return $this;
+    /**
+     * The field under validation must exist as a key in another field's array.
+     */
+    public function inArrayKeys(string $field): static
+    {
+        return $this->addRule('in_array_keys:'.$field);
+    }
+
+    /**
+     * Each value in the field under validation must be unique.
+     */
+    public function distinct(?string $mode = null): static
+    {
+        return $this->addRule($mode ? 'distinct:'.$mode : 'distinct');
+    }
+
+    /**
+     * Get an iterator for the validation rules.
+     */
+    public function getIterator(): Traversable
+    {
+        return new \ArrayIterator([
+            ...array_unique($this->constraints),
+            ...$this->rules,
+        ]);
+    }
+
+    /**
+     * Convert the rule to a validation string.
+     *
+     * Lossy — only returns string constraints. Embedded rule objects
+     * are NOT included. The parser uses getIterator() which returns
+     * everything.
+     */
+    public function __toString(): string
+    {
+        if (! empty($this->rules)) {
+            trigger_error(
+                'Casting '.static::class.' to string discards embedded rule objects. Use the rule object directly instead of casting to string.',
+                E_USER_DEPRECATED,
+            );
+        }
+
+        return implode('|', array_unique($this->constraints));
     }
 }
