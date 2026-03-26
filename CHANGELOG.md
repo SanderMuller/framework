@@ -1,6 +1,18 @@
 # Release Notes for 12.x
 
-## [Unreleased](https://github.com/laravel/framework/compare/v12.55.0...12.x)
+## [Unreleased](https://github.com/laravel/framework/compare/v12.56.0...12.x)
+
+## [v12.56.0](https://github.com/laravel/framework/compare/v12.55.1...v12.56.0) - 2026-03-26
+
+* [12.x] `schedule:list` display expression in the correct timezone by [@xiCO2k](https://github.com/xiCO2k) in https://github.com/laravel/framework/pull/59307
+* [12.x] Fix validation wildcard array message type error by [@sadique-cws](https://github.com/sadique-cws) in https://github.com/laravel/framework/pull/59339
+* Preserve class type of mocked classes by [@AJenbo](https://github.com/AJenbo) in https://github.com/laravel/framework/pull/59353
+
+## [v12.55.1](https://github.com/laravel/framework/compare/v12.55.0...v12.55.1) - 2026-03-18
+
+* [12.x] Correct truncate exceptions at by [@bretto36](https://github.com/bretto36) in https://github.com/laravel/framework/pull/59239
+* [12.x] Fix float pluralization in trans_choice() by [@JulianGlueck](https://github.com/JulianGlueck) in https://github.com/laravel/framework/pull/59268
+* [12.x] Fix tests on PHP 8.5 by [@SanderMuller](https://github.com/SanderMuller) in https://github.com/laravel/framework/pull/59251
 
 ## [v12.55.0](https://github.com/laravel/framework/compare/v12.54.1...v12.55.0) - 2026-03-17
 
